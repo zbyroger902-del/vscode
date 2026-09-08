@@ -115,8 +115,9 @@ export class ChatParticipantRequestHandler {
 
 		const { turns, sessionId } = _instantiationService.invokeFunction(accessor => addHistoryToConversation(accessor, rawHistory));
 		normalizeSummariesOnRounds(turns);
-		// Use session ID from history, then VS Code's request.sessionId, then fallback to UUID
-		const actualSessionId = sessionId ?? request.sessionId ?? generateUuid();
+		// Prefer VS Code's request.sessionId (the live session, i.e. a freshly-forked session's new id)
+		// over the id carried by copied history. See {@link resolveSessionId} for the full rationale.
+		const actualSessionId = resolveSessionId(request.sessionId, sessionId);
 
 		this.documentContext = IDocumentContext.inferDocumentContext(request, tabsAndEditorsService.activeTextEditor, turns);
 
@@ -339,6 +340,16 @@ export class ChatParticipantRequestHandler {
 	}
 }
 
+
+/**
+ * Resolves the session id a chat request is attributed to. Prefers the live `requestSessionId` so a
+ * freshly-forked chat doesn't inherit the original session's id from its copied history.
+ *
+ * @returns `requestSessionId`, else `historySessionId`, else a fresh UUID.
+ */
+export function resolveSessionId(requestSessionId: string | undefined, historySessionId: string | undefined): string {
+	return requestSessionId ?? historySessionId ?? generateUuid();
+}
 
 export function addHistoryToConversation(accessor: ServicesAccessor, history: ReadonlyArray<ChatRequestTurn | ChatResponseTurn>): { turns: Turn[]; sessionId: string | undefined } {
 	const instaService = accessor.get(IInstantiationService);
